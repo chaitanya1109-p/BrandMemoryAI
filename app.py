@@ -1,0 +1,492 @@
+import pandas as pd
+import streamlit as st
+from openai import OpenAI
+
+
+# ==========================================
+# PAGE SETTINGS
+# ==========================================
+
+st.set_page_config(
+    page_title="BrandMemory AI",
+    page_icon="🧠",
+    layout="wide"
+)
+
+
+# ==========================================
+# TITLE
+# ==========================================
+
+st.title("🧠 BrandMemory AI")
+
+st.subheader("AI Content Strategy Agent")
+
+st.write(
+    "BrandMemory AI analyzes historical content performance, "
+    "remembers important patterns, and uses a local AI model "
+    "to recommend future content strategies."
+)
+
+
+# ==========================================
+# CSV UPLOAD
+# ==========================================
+
+st.header("📂 Upload Historical Content")
+
+uploaded_file = st.file_uploader(
+    "Upload your historical content CSV",
+    type=["csv"]
+)
+
+if uploaded_file is None:
+    st.info(
+        "Upload a CSV file to begin analyzing your brand's content."
+    )
+    st.stop()
+
+
+# ==========================================
+# LOAD DATA
+# ==========================================
+
+try:
+    data = pd.read_csv(uploaded_file)
+except Exception as e:
+    st.error("Could not read the CSV file.")
+    st.exception(e)
+    st.stop()
+
+
+st.success(
+    f"Loaded {len(data)} content records successfully."
+)
+
+
+# ==========================================
+# CHECK REQUIRED COLUMNS
+# ==========================================
+
+required_columns = [
+    "title",
+    "topic",
+    "platform",
+    "views",
+    "likes",
+    "comments",
+    "shares",
+    "conversions"
+]
+
+missing_columns = [
+    column
+    for column in required_columns
+    if column not in data.columns
+]
+
+if missing_columns:
+    st.error(
+        "Your CSV is missing these required columns: "
+        + ", ".join(missing_columns)
+    )
+    st.stop()
+
+
+# ==========================================
+# CALCULATE ENGAGEMENT
+# ==========================================
+
+data["engagement"] = (
+    data["likes"]
+    + data["comments"]
+    + data["shares"]
+)
+
+
+# ==========================================
+# CONTENT PERFORMANCE
+# ==========================================
+
+st.header("📊 Content Performance")
+
+total_posts = len(data)
+
+total_views = data["views"].sum()
+
+total_engagement = data["engagement"].sum()
+
+total_conversions = data["conversions"].sum()
+
+
+col1, col2, col3, col4 = st.columns(4)
+
+
+col1.metric(
+    "Total Posts",
+    total_posts
+)
+
+
+col2.metric(
+    "Total Views",
+    f"{total_views:,}"
+)
+
+
+col3.metric(
+    "Total Engagement",
+    f"{total_engagement:,}"
+)
+
+
+col4.metric(
+    "Total Conversions",
+    f"{total_conversions:,}"
+)
+
+
+# ==========================================
+# TOP PERFORMING CONTENT
+# ==========================================
+
+st.header("🏆 Top Performing Content")
+
+top_content = (
+    data
+    .sort_values(
+        by="engagement",
+        ascending=False
+    )
+    .head(5)
+)
+
+
+st.dataframe(
+    top_content[
+        [
+            "title",
+            "topic",
+            "platform",
+            "views",
+            "likes",
+            "comments",
+            "shares",
+            "engagement",
+            "conversions"
+        ]
+    ],
+    hide_index=True,
+    width="stretch"
+)
+
+
+# ==========================================
+# TOPIC PERFORMANCE
+# ==========================================
+
+st.header("📚 Topic Performance")
+
+
+topic_performance = (
+    data
+    .groupby("topic")
+    .agg(
+        posts=("title", "count"),
+        views=("views", "sum"),
+        engagement=("engagement", "sum"),
+        conversions=("conversions", "sum")
+    )
+    .reset_index()
+)
+
+
+topic_performance["engagement_rate"] = (
+    topic_performance["engagement"]
+    / topic_performance["views"]
+    * 100
+)
+
+
+topic_performance = topic_performance.sort_values(
+    by="engagement",
+    ascending=False
+)
+
+
+st.dataframe(
+    topic_performance,
+    hide_index=True,
+    width="stretch"
+)
+
+
+# ==========================================
+# BRAND MEMORY
+# ==========================================
+
+st.header("🧠 Brand Memory")
+
+
+best_topic = (
+    data
+    .groupby("topic")["engagement"]
+    .sum()
+    .sort_values(ascending=False)
+    .index[0]
+)
+
+
+best_platform = (
+    data
+    .groupby("platform")["engagement"]
+    .sum()
+    .sort_values(ascending=False)
+    .index[0]
+)
+
+
+best_conversion_topic = (
+    data
+    .groupby("topic")["conversions"]
+    .sum()
+    .sort_values(ascending=False)
+    .index[0]
+)
+
+
+st.write(
+    "BrandMemory AI has learned these patterns "
+    "from the historical data:"
+)
+
+
+st.info(
+    f"🧠 High-engagement topic: **{best_topic}**"
+)
+
+
+st.info(
+    f"🧠 Strongest platform for engagement: "
+    f"**{best_platform}**"
+)
+
+
+st.info(
+    f"🧠 Top conversion topic: "
+    f"**{best_conversion_topic}**"
+)
+
+
+# ==========================================
+# LOCAL AI CONTENT STRATEGY
+# ==========================================
+
+st.header("🤖 AI Content Strategy")
+
+st.write(
+    "This strategy is generated by a local Gemma model "
+    "running through LM Studio on your computer."
+)
+
+
+if st.button("Generate AI Content Strategy"):
+
+    # --------------------------------------
+    # TOP POSTS FOR AI CONTEXT
+    # --------------------------------------
+
+    top_posts = (
+        data
+        .sort_values(
+            by="engagement",
+            ascending=False
+        )
+        .head(5)
+    )
+
+
+    # --------------------------------------
+    # PLATFORM PERFORMANCE
+    # --------------------------------------
+
+    platform_performance = (
+        data
+        .groupby("platform")["engagement"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+
+    # --------------------------------------
+    # CREATE HISTORICAL EVIDENCE
+    # --------------------------------------
+
+    evidence = f"""
+HISTORICAL CONTENT DATA
+
+TOP PERFORMING POSTS:
+{top_posts[
+    [
+        "title",
+        "topic",
+        "platform",
+        "views",
+        "engagement",
+        "conversions"
+    ]
+].to_string(index=False)}
+
+TOPIC PERFORMANCE:
+{topic_performance.to_string(index=False)}
+
+PLATFORM PERFORMANCE:
+{platform_performance.to_string(index=False)}
+
+BRAND MEMORY:
+- Topic Dominance: {best_topic}
+- Platform Strength: {best_platform}
+- Top Conversion Topic: {best_conversion_topic}
+
+HIGH-IMPACT CONTENT:
+Analyze the top-performing posts to identify common patterns
+in topic, platform, engagement and conversions.
+
+CONVERSION INSIGHT:
+Identify which topics and content patterns are associated
+with stronger conversions.
+
+SUCCESSFUL CONTENT PATTERN:
+Identify common characteristics among the highest-performing
+posts that can be repeated in future content.
+"""
+
+        # -----------------------------------------
+        # AI PROMPT
+        # -----------------------------------------
+
+    prompt = f"""
+You are BrandMemory AI, an AI content strategy agent.
+
+Analyze the historical brand data below and generate a clear,
+evidence-based content strategy.
+
+{evidence}
+
+Give the response in exactly these sections:
+
+### 🧠 Brand Memory Learned
+- Topic Dominance
+- Platform Strength
+- High-Impact Content
+
+### 📈 Conversion Insight
+Explain which topic or content pattern appears most useful
+for conversions based on the historical data.
+
+### 🔎 Successful Content Pattern
+Explain what the highest-performing posts have in common.
+
+### 🚀 Actionable AI Strategy
+Give 3 specific recommendations for future content.
+For each recommendation, explain what to do, where to do it,
+and why the historical data supports it.
+
+### 💡 What BrandMemory Learned
+Give a short conclusion explaining what the brand should
+learn from its historical content performance.
+
+Do not invent statistics or facts that are not present in the data.
+"""
+
+    # --------------------------------------
+    # AI PROMPT
+    # --------------------------------------
+    # 
+    prompt = f"""
+You are BrandMemory AI, an AI content strategy agent.
+
+Your job is to study historical brand content performance and turn it into
+clear, evidence-based recommendations.
+
+{evidence}
+
+Based ONLY on the historical evidence above, generate the following:
+
+### 1. Brand Memory Learned
+Explain these three learned patterns:
+- Topic Dominance
+- Platform Strength
+- High-Impact Content
+
+### 2. Conversion Insight
+Explain which topic or content pattern appears most useful for conversions
+and why, based on the historical data.
+
+### 3. Successful Content Pattern
+Identify common characteristics of the best-performing historical posts.
+Mention patterns such as topic, platform, engagement or content style when
+supported by the data.
+
+### 4. Actionable AI Strategy
+Give 3 specific recommendations for future content.
+Each recommendation should explain:
+- What to do
+- Where to do it
+- Why the historical data supports it
+
+### 5. What BrandMemory Learned
+Give a short conclusion explaining how the historical data should influence
+the brand's future content strategy.
+
+Do not invent statistics or facts that are not present in the historical data.
+Keep the response concise, structured and suitable for a business presentation.
+"""
+
+
+    # --------------------------------------
+    # CONNECT TO LM STUDIO
+    # --------------------------------------
+
+    try:
+
+        client = OpenAI(
+            base_url="http://127.0.0.1:1234/v1",
+            api_key="lm-studio"
+        )
+
+        response = client.chat.completions.create(
+            model="google/gemma-4-e4b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are BrandMemory AI. "
+                        "Give short, practical content recommendations."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.7,
+            max_tokens=1000,
+            reasoning_effort="low"
+        )
+
+        output = response.choices[0].message.content
+
+        st.subheader("🧠 BrandMemory AI Strategy")
+
+        if output:
+            st.markdown(output)
+        else:
+            st.warning("The AI model returned an empty response.")
+            st.write(response)
+
+    except Exception as e:
+
+        st.error("Could not connect to the local AI model.")
+
+        st.exception(e)
